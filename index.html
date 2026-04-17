@@ -3,121 +3,120 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Buscador IA - Google Drive</title>
+    <title>IA Document Analyzer</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.min.js"></script>
 </head>
-<body class="bg-slate-50 min-h-screen flex items-center justify-center p-4 font-sans text-slate-800">
+<body class="bg-slate-50 min-h-screen p-4 font-sans text-slate-800">
 
-    <div class="bg-white rounded-2xl shadow-xl w-full max-w-2xl p-8 border border-slate-100">
-        
-        <div class="text-center mb-8">
-            <h1 class="text-3xl font-extrabold text-blue-600 tracking-tight mb-2">Drive AI Search</h1>
-            <p class="text-slate-500 text-sm">Conecte a conta para pesquisar em documentos usando inteligência artificial.</p>
+    <div class="max-w-3xl mx-auto mt-10 bg-white rounded-3xl shadow-2xl overflow-hidden border border-slate-100">
+        <div class="bg-gradient-to-r from-blue-600 to-indigo-700 p-8 text-white text-center">
+            <h1 class="text-3xl font-bold mb-2">Analisador de Documentos IA</h1>
+            <p class="opacity-80">Faça upload de um arquivo e faça perguntas ao Gemini</p>
         </div>
 
-        <div id="sessao-auth" class="flex justify-center mb-6">
-            <button id="auth-btn" onclick="lidarComCliqueAuth()" disabled
-                class="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-6 rounded-lg shadow-md transition duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2">
-                <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M12.24 10.285V14.4h6.806c-.275 1.765-2.056 5.174-6.806 5.174-4.095 0-7.439-3.389-7.439-7.574s3.345-7.574 7.439-7.574c2.33 0 3.891.989 4.785 1.849l3.254-3.138C18.189 1.186 15.479 0 12.24 0c-6.635 0-12 5.365-12 12s5.365 12 12 12c6.926 0 11.52-4.869 11.52-11.726 0-.788-.085-1.39-.189-1.989H12.24z"/></svg>
-                Carregando Google Auth...
-            </button>
-        </div>
-
-        <div id="sessao-app" class="hidden space-y-6">
-            
-            <div class="bg-slate-50 rounded-xl p-5 border border-slate-200">
-                <h3 class="text-sm font-bold text-slate-600 uppercase tracking-wider mb-3">Documentos Disponíveis</h3>
-                <ul id="lista-arquivos" class="space-y-2 max-h-48 overflow-y-auto pr-2">
-                    </ul>
-            </div>
-
-            <div id="area-busca" class="hidden flex flex-col gap-4">
-                <div class="bg-blue-50 border border-blue-100 rounded-lg p-4 flex items-center justify-between">
-                    <span class="text-blue-800 text-sm font-medium">Arquivo selecionado: <strong id="nome-arquivo-selecionado"></strong></span>
+        <div class="p-8 space-y-6">
+            <div id="drop-zone" class="border-2 border-dashed border-slate-300 rounded-2xl p-10 text-center hover:border-blue-500 transition-colors cursor-pointer bg-slate-50">
+                <input type="file" id="file-input" class="hidden" accept=".txt,.pdf">
+                <div id="upload-placeholder">
+                    <svg class="w-12 h-12 mx-auto text-slate-400 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path></svg>
+                    <p class="text-slate-600 font-medium">Clique para subir ou arraste um PDF ou TXT</p>
                 </div>
-
-                <div class="flex gap-2">
-                    <input type="text" id="input-busca" placeholder="O que deseja encontrar no documento?" 
-                        class="flex-1 bg-slate-50 border border-slate-300 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500 transition shadow-sm">
-                    <button onclick="buscarComGemini()" 
-                        class="bg-slate-800 hover:bg-slate-900 text-white font-semibold py-3 px-6 rounded-lg transition shadow-md">
-                        Pesquisar
-                    </button>
-                </div>
-
-                <div class="mt-4 p-5 bg-slate-100 rounded-xl border border-slate-200 min-h-[100px]">
-                    <h4 class="text-xs font-bold text-slate-500 uppercase mb-2">Resposta da IA:</h4>
-                    <p id="resposta-ia" class="text-slate-700 text-sm leading-relaxed whitespace-pre-wrap">Aguardando pesquisa...</p>
+                <div id="file-info" class="hidden">
+                    <p class="text-blue-600 font-bold text-lg" id="file-name"></p>
+                    <button onclick="resetarUpload()" class="text-xs text-red-500 underline mt-2">Trocar arquivo</button>
                 </div>
             </div>
-        </div>
 
+            <div class="space-y-4">
+                <textarea id="pergunta-input" rows="3" placeholder="Ex: Faça um resumo dos pontos principais deste contrato..." 
+                    class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:outline-none transition"></textarea>
+                
+                <button onclick="enviarParaIA()" id="btn-processar" disabled
+                    class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 rounded-xl shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed">
+                    Analisar com Gemini IA
+                </button>
+            </div>
+
+            <div id="resultado-container" class="hidden space-y-2">
+                <h3 class="text-sm font-bold text-slate-500 uppercase">Resposta da IA</h3>
+                <div id="resposta-ia" class="bg-slate-100 p-6 rounded-2xl text-slate-700 leading-relaxed border border-slate-200"></div>
+            </div>
+        </div>
     </div>
 
-<script>
-    // 1. RECOMENDAÇÃO: Use variáveis de ambiente se estiver usando um bundler, 
-    // ou certifique-se de que o CLIENT_ID abaixo é o de produção.
-    const CLIENT_ID = 'SEU_CLIENT_ID_DE_PRODUCAO.apps.googleusercontent.com';
-    const ESCOPOS = 'https://www.googleapis.com/auth/drive.readonly';
-    
-    let tokenClient;
-    let gapiInicializada = false;
-    let gisInicializada = false;
+    <script>
+        const fileInput = document.getElementById('file-input');
+        const dropZone = document.getElementById('drop-zone');
+        let textoExtraido = "";
+        let nomeArquivo = "";
 
-    // Função para verificar se estamos em HTTPS (exigência do Google para usuários externos)
-    function verificarSeguranca() {
-        if (window.location.protocol !== 'https:' && window.location.hostname !== 'localhost') {
-            alert("A API do Google Drive exige HTTPS para funcionar fora do ambiente local.");
-        }
-    }
+        // Clique na zona de drop
+        dropZone.onclick = () => fileInput.click();
 
-    async function gapiCarregada() {
-        gapi.load('client', async () => {
-            try {
-                // Inicializa o cliente básico
-                await gapi.client.init({});
-                // Carrega a biblioteca do Drive especificamente
-                await gapi.client.load('https://www.googleapis.com/discovery/v1/apis/drive/v3/rest');
-                gapiInicializada = true;
-                verificarStatusCarregamento();
-            } catch (err) {
-                console.error("Erro GAPI:", err);
+        fileInput.onchange = (e) => processarArquivo(e.target.files[0]);
+
+        async function processarArquivo(file) {
+            if (!file) return;
+            nomeArquivo = file.name;
+            
+            if (file.type === "application/pdf") {
+                textoExtraido = await lerPDF(file);
+            } else {
+                textoExtraido = await file.text();
             }
-        });
-    }
 
-    function gisCarregada() {
-        try {
-            tokenClient = google.accounts.oauth2.initTokenClient({
-                client_id: CLIENT_ID,
-                scope: ESCOPOS,
-                callback: async (resposta) => {
-                    if (resposta.error) throw resposta;
-                    
-                    // Armazenamento seguro temporário do token
-                    sessionStorage.setItem('drive_access_token', resposta.access_token);
-                    
-                    document.getElementById('sessao-auth').classList.add('hidden');
-                    document.getElementById('sessao-app').classList.remove('hidden');
-                    listarArquivos();
-                },
+            document.getElementById('upload-placeholder').classList.add('hidden');
+            document.getElementById('file-info').classList.remove('hidden');
+            document.getElementById('file-name').innerText = `📄 ${nomeArquivo}`;
+            document.getElementById('btn-processar').disabled = false;
+        }
+
+        async function lerPDF(file) {
+            const reader = new FileReader();
+            return new Promise((resolve) => {
+                reader.onload = async function() {
+                    const typedarray = new Uint8Array(this.result);
+                    const pdf = await pdfjsLib.getDocument(typedarray).promise;
+                    let textoFull = "";
+                    for(let i=1; i <= pdf.numPages; i++) {
+                        const page = await pdf.getPage(i);
+                        const content = await page.getTextContent();
+                        textoFull += content.items.map(s => s.str).join(' ') + "\n";
+                    }
+                    resolve(textoFull);
+                };
+                reader.readAsArrayBuffer(file);
             });
-            gisInicializada = true;
-            verificarStatusCarregamento();
-        } catch (err) {
-            console.error("Erro GIS:", err);
         }
-    }
 
-    function verificarStatusCarregamento() {
-        if (gapiInicializada && gisInicializada) {
-            const btn = document.getElementById('auth-btn');
-            btn.disabled = false;
-            btn.innerHTML = "Conectar Google Drive";
+        function resetarUpload() {
+            location.reload();
         }
-    }
 
-    window.onload = verificarSeguranca;
-</script>
+        async function enviarParaIA() {
+            const pergunta = document.getElementById('pergunta-input').value;
+            const resContainer = document.getElementById('resultado-container');
+            const resText = document.getElementById('resposta-ia');
+            
+            if (!pergunta) return alert("Digite uma pergunta!");
+
+            resContainer.classList.remove('hidden');
+            resText.innerHTML = '<div class="flex items-center gap-2 text-blue-600 animate-pulse font-medium">Pensando...</div>';
+
+            try {
+                const response = await fetch('http://localhost:3000/analisar-documento', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ textoDocumento: textoExtraido, pergunta, nomeArquivo })
+                });
+                
+                const data = await response.json();
+                resText.innerText = data.resposta;
+            } catch (err) {
+                resText.innerText = "Erro ao conectar com o servidor.";
+            }
+        }
+    </script>
 </body>
 </html>
