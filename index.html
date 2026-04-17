@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Buscador IA - Google Drive</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-50 min-h-screen flex items-center justify-center p-4 font-sans text-slate-800">
+
+    <div class="bg-white rounded-2xl shadow-xl w-full max-w-2xl p-8 border border-slate-100">
+        
+        <div class="text-center mb-8">
+            <h1 class="text-3xl font-extrabold text-blue-600 tracking-tight mb-2">Drive AI Search</h1>
+            <p class="text-slate-500 text-sm">Conecte a conta para pesquisar em documentos usando inteligência artificial.</p>
+        </div>
+
+        <div id="sessao-auth" class="flex justify-center mb-6">
+            <button id="auth-btn" onclick="lidarComCliqueAuth()" disabled
+                class="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-6 rounded-lg shadow-md transition duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2">
+                <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M12.24 10.285V14.4h6.806c-.275 1.765-2.056 5.174-6.806 5.174-4.095 0-7.439-3.389-7.439-7.574s3.345-7.574 7.439-7.574c2.33 0 3.891.989 4.785 1.849l3.254-3.138C18.189 1.186 15.479 0 12.24 0c-6.635 0-12 5.365-12 12s5.365 12 12 12c6.926 0 11.52-4.869 11.52-11.726 0-.788-.085-1.39-.189-1.989H12.24z"/></svg>
+                Carregando Google Auth...
+            </button>
+        </div>
+
+        <div id="sessao-app" class="hidden space-y-6">
+            
+            <div class="bg-slate-50 rounded-xl p-5 border border-slate-200">
+                <h3 class="text-sm font-bold text-slate-600 uppercase tracking-wider mb-3">Documentos Disponíveis</h3>
+                <ul id="lista-arquivos" class="space-y-2 max-h-48 overflow-y-auto pr-2">
+                    </ul>
+            </div>
+
+            <div id="area-busca" class="hidden flex flex-col gap-4">
+                <div class="bg-blue-50 border border-blue-100 rounded-lg p-4 flex items-center justify-between">
+                    <span class="text-blue-800 text-sm font-medium">Arquivo selecionado: <strong id="nome-arquivo-selecionado"></strong></span>
+                </div>
+
+                <div class="flex gap-2">
+                    <input type="text" id="input-busca" placeholder="O que deseja encontrar no documento?" 
+                        class="flex-1 bg-slate-50 border border-slate-300 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500 transition shadow-sm">
+                    <button onclick="buscarComGemini()" 
+                        class="bg-slate-800 hover:bg-slate-900 text-white font-semibold py-3 px-6 rounded-lg transition shadow-md">
+                        Pesquisar
+                    </button>
+                </div>
+
+                <div class="mt-4 p-5 bg-slate-100 rounded-xl border border-slate-200 min-h-[100px]">
+                    <h4 class="text-xs font-bold text-slate-500 uppercase mb-2">Resposta da IA:</h4>
+                    <p id="resposta-ia" class="text-slate-700 text-sm leading-relaxed whitespace-pre-wrap">Aguardando pesquisa...</p>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+
+
+<script async defer src="https://apis.google.com/js/api.js" 
+        onload="gapiCarregada()" 
+        onerror="erroAoCarregar('GAPI')"></script>
+<script async defer src="https://accounts.google.com/gsi/client" 
+        onload="gisCarregada()" 
+        onerror="erroAoCarregar('GSI')"></script>
+
+<script>
+    const CLIENT_ID = 'INSERIR_CLIENT_ID_AQUI';
+    const DOCUMENTO_DESCOBERTA = 'https://www.googleapis.com/discovery/v1/apis/drive/v3/rest';
+    const ESCOPOS = 'https://www.googleapis.com/auth/drive.readonly';
+    
+    let tokenClient;
+    let tokenDeAcesso = null;
+    let gapiInicializada = false;
+    let gisInicializada = false;
+
+    function erroAoCarregar(tipo) {
+        console.error(`Erro ao carregar biblioteca: ${tipo}`);
+        const btn = document.getElementById('auth-btn');
+        btn.innerHTML = "Erro ao carregar Google Auth. Verifique seu AdBlock.";
+        btn.classList.replace('bg-blue-600', 'bg-red-600');
+    }
+
+    // 1. Inicializa o GAPI (Google API Client)
+    async function gapiCarregada() {
+        gapi.load('client', async () => {
+            try {
+                await gapi.client.init({
+                    // Removido discoveryDocs temporariamente para simplificar e evitar erros de CORS na inicialização
+                    // A biblioteca gapi.client.drive será carregada sob demanda
+                });
+                gapiInicializada = true;
+                verificarStatusCarregamento();
+            } catch (err) {
+                console.error("Erro no GAPI init:", err);
+            }
+        });
+    }
+
+    // 2. Inicializa o GSI (Identity Services)
+    function gisCarregada() {
+        try {
+            tokenClient = google.accounts.oauth2.initTokenClient({
+                client_id: CLIENT_ID,
+                scope: ESCOPOS,
+                callback: (resposta) => {
+                    if (resposta.error !== undefined) {
+                        throw (resposta);
+                    }
+                    tokenDeAcesso = resposta.access_token;
+                    document.getElementById('sessao-auth').classList.add('hidden');
+                    document.getElementById('sessao-app').classList.remove('hidden');
+                    listarArquivos();
+                },
+            });
+            gisInicializada = true;
+            verificarStatusCarregamento();
+        } catch (err) {
+            console.error("Erro no GSI init:", err);
+        }
+    }
+
+    function verificarStatusCarregamento() {
+        if (gapiInicializada && gisInicializada) {
+            const btn = document.getElementById('auth-btn');
+            btn.disabled = false;
+            btn.innerHTML = `
+                <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M12.24 10.285V14.4h6.806c-.275 1.765-2.056 5.174-6.806 5.174-4.095 0-7.439-3.389-7.439-7.574s3.345-7.574 7.439-7.574c2.33 0 3.891.989 4.785 1.849l3.254-3.138C18.189 1.186 15.479 0 12.24 0c-6.635 0-12 5.365-12 12s5.365 12 12 12c6.926 0 11.52-4.869 11.52-11.726 0-.788-.085-1.39-.189-1.989H12.24z"/></svg>
+                Autenticar com Google
+            `;
+        }
+    }
+
+    function lidarComCliqueAuth() {
+        // Força a solicitação de token mesmo que já tenha ocorrido algum erro prévio
+        tokenClient.requestAccessToken({ prompt: 'consent' });
+    }
+
+    async function listarArquivos() {
+        // Garantir que a biblioteca drive está carregada antes de listar
+        if (!gapi.client.drive) {
+            await gapi.client.load('drive', 'v3');
+        }
+        
+        try {
+            const resposta = await gapi.client.drive.files.list({
+                q: "mimeType='application/vnd.google-apps.document' or mimeType='text/plain'",
+                fields: 'files(id, name)',
+            });
+            
+            const arquivos = resposta.result.files;
+            const lista = document.getElementById('lista-arquivos');
+            lista.innerHTML = '';
+            
+            if (!arquivos || arquivos.length === 0) {
+                lista.innerHTML = '<li class="text-sm p-2 text-slate-500">Nenhum arquivo encontrado.</li>';
+                return;
+            }
+
+            arquivos.forEach(arquivo => {
+                const li = document.createElement('li');
+                li.className = "p-3 bg-white border border-slate-200 rounded-lg text-sm hover:bg-blue-50 cursor-pointer transition";
+                li.innerText = arquivo.name;
+                li.onclick = () => selecionarArquivo(arquivo.id, arquivo.name);
+                lista.appendChild(li);
+            });
+        } catch (erro) {
+            console.error("Erro ao listar:", erro);
+        }
+    }
+
+    // ... (restante das funções selecionarArquivo e buscarComGemini permanecem iguais)
+</script>
+</body>
+</html>
